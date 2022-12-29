@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:file="http://www.mulesoft.org/schema/mule/file"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/file http://www.mulesoft.org/schema/mule/file/current/mule-file.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+
+	<http:listener-config name="HTTP_Listener_config"
+		doc:name="HTTP Listener config"
+		doc:id="87e36350-94c6-465e-a670-e155ecbc8638">
+		<http:listener-connection host="0.0.0.0"
+			port="8081" />
+	</http:listener-config>
+	
+	<configuration-properties doc:name="Configuration properties" doc:id="f3bb6615-1d03-464d-98f3-af11962b020f" file="api\test.properties" />
+	<flow name="project01Flow"
+		doc:id="277ab9d4-094a-4ded-a7cd-3a24e7a9af2e">
+		<http:listener doc:name="Listener"
+			doc:id="503dd2f8-1b9f-4172-a913-b88e736d9244"
+			config-ref="HTTP_Listener_config" path="/test" />
+		<logger level="INFO" doc:name="INFO Logger"
+			doc:id="1f4e99da-4f82-48e4-a519-6c6686eb18e0" message="INFO LOGGER ************* #[p('file.path')]"/>
+		<logger level="ERROR" doc:name="ERROR Logger" doc:id="a4086d0f-9e4d-4970-addd-0fa2120ea2a5" message="ERROR LOGGER"/>
+		<logger level="DEBUG" doc:name="DEBUG Logger" doc:id="60c1f6bb-4000-4989-af2c-f27f8498c4b5" message="DEBUG LOGGER"/>
+		<logger level="WARN" doc:name="WARN Logger" doc:id="7a0ccd13-e15b-40a4-8368-a4b7a5ad2331" message="WARN Logger"/>
+		<flow-ref doc:name="Copy_of_Flow Reference" doc:id="9b862ddd-c8b8-4fba-8dac-de1e0fe7c8a1" name="project01FlowReader" />
+	</flow>
+	<flow name="project01FlowReader" doc:id="da03ed13-34e4-48a2-9093-68c32017727f" >
+		<file:list doc:name="List" doc:id="ef1fbd43-4ed3-4fd5-9e0b-86b9a86c1188" directoryPath="${file.path}"/>
+		<ee:transform doc:name="Transform Message" doc:id="f0d565be-c15d-4032-8cc7-8137de86753e" >
+			<ee:message >
+			</ee:message>
+			<ee:variables >
+				<ee:set-variable variableName="fileNameList" ><![CDATA[%dw 2.0
+output application/java
+---
+payload.typedAttributes.path]]></ee:set-variable>
+				<ee:set-variable variableName="fileName" ><![CDATA[%dw 2.0
+output application/java
+var filename = payload.typedAttributes.fileName[0] default "error" as String
+---
+(filename splitBy  ".")[0]
+]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<choice doc:name="Choice" doc:id="73557396-757d-4dd8-9409-05086669b71f" >
+			<when expression="#[sizeOf(vars.fileNameList default [])  &gt; 0]">
+				<logger level="INFO" doc:name="Logger" doc:id="a3479636-de0c-4962-8953-0de5c5490cc1" message="#[vars.fileNameList[0]]" />
+				<file:read doc:name="Read" doc:id="d8d0e0ee-7dae-441c-8875-d7f5028a1a1b" path="#[vars.fileNameList[0]]" />
+				<ee:transform doc:name="Transform Message" doc:id="5f52b04b-5bb5-4473-b609-edf5c688b885">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+			</ee:message>
+			<ee:variables>
+			</ee:variables>
+		</ee:transform>
+				<foreach doc:name="For Each" doc:id="5245c9ba-1436-42ea-98d0-5b50c9b9699c" collection="#[payload]">
+			<logger level="INFO" doc:name="Logger" doc:id="db5900b3-460c-45c3-b042-3977bb0eb600" message="counter : #[vars.counter] payload : #[payload]" />
+					<choice doc:name="Choice" doc:id="6f005276-edae-421e-bbaa-b2d9f9e41a14" >
+						<when expression="#[vars.counter == 120]">
+							<file:write doc:name="Write   " doc:id="62cebc9e-10d7-46bb-9d4e-ceba350a550a" path='#["C:/workingspace/write/"++ vars.fileName ++ now() as String {format: "y-MM-dd"}++ ".csv"]'/>
+						</when>
+					</choice>
+		</foreach>
+				<file:move doc:name="Move" doc:id="8a553100-518e-4cca-aaab-8a5a57b8fcbc" sourcePath="#[vars.fileNameList[0]]" targetPath="C:\workingspace\completed" />
+				<choice doc:name="Choice" doc:id="3b7a78a0-9bda-4623-a005-afc3b5edc5db">
+			<when expression="#[sizeOf(vars.fileNameList  default []) &gt;1]">
+				<flow-ref doc:name="Flow Reference" doc:id="2a17c750-867c-4dbf-ac0e-0eda50b36ec4" name="project01FlowReader" />
+			</when>
+					<otherwise>
+				<logger level="INFO" doc:name="Logger" doc:id="75ef42b3-90b1-4c0d-9118-f6c1f2206680" message="On Complete" />
+			</otherwise>
+		</choice>
+				<ee:transform doc:name="Transform Message" doc:id="c1daa3a9-409b-4e88-8937-0bada9d411a0">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	message : "on complete"
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+			</when>
+			<otherwise >
+				<ee:transform doc:name="Transform Message" doc:id="4bb48f44-447c-4951-8a39-8ad94b7677f4" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	message : "empty message"
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</otherwise>
+		</choice>
+	</flow>
+</mule>
